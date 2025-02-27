@@ -1,4 +1,3 @@
-// ZombieGo.java
 package hjzhhhj;
 
 import javax.swing.*;
@@ -6,6 +5,8 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.Map;
+import java.util.List;
 
 public class ZombieGo extends JPanel implements ActionListener, KeyListener {
 
@@ -87,7 +88,6 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
         super.paintComponent(g);
         g.drawImage(background, 0, 0, getWidth(), getHeight(), this);
 
-        // 플레이어 이미지 설정
         Image currentPlayerImage = playerFront;
         if (lastDirectionY == -1)
             currentPlayerImage = playerBack;
@@ -99,7 +99,6 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
             currentPlayerImage = playerRight;
         g.drawImage(currentPlayerImage, playerX, playerY, 70, 100, this);
 
-        // 좀비 이미지 설정
         for (Point zombie : zombies) {
             int dx = Integer.compare(playerX, zombie.x);
             int dy = Integer.compare(playerY, zombie.y);
@@ -119,7 +118,6 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
             g.drawImage(currentZombieImage, zombie.x, zombie.y, 80, 110, this);
         }
 
-        // 화살 이미지 설정
         for (Point projectile : projectiles) {
             Image currentArrow = arrowUp;
             if (projectileSpeedY == -10)
@@ -144,7 +142,6 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
         moveProjectiles();
         checkCollisions();
         repaint();
-
         if (random.nextInt(100) < 2) {
             spawnZombie();
         }
@@ -154,14 +151,12 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
         for (Point zombie : zombies) {
             int dx = Integer.compare(playerX, zombie.x);
             int dy = Integer.compare(playerY, zombie.y);
-
             if (dx != 0 && dy != 0) {
                 if (random.nextBoolean())
                     dy = 0;
                 else
                     dx = 0;
             }
-
             if (dx == -1)
                 zombie.x -= 2;
             else if (dx == 1)
@@ -178,7 +173,6 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
             Point p = projectiles.get(i);
             p.x += projectileSpeedX;
             p.y += projectileSpeedY;
-
             if (p.y < 0 || p.y > 600 || p.x < 0 || p.x > 800) {
                 projectiles.remove(i);
                 i--;
@@ -187,21 +181,28 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
     }
 
     private void checkCollisions() {
-        // 플레이어와 좀비 충돌 시 게임 오버 처리
+        // 1. 플레이어가 좀비랑 충돌했는지 체크 (플레이어 죽음)
         for (Point zombie : zombies) {
-            if (new Rectangle(playerX, playerY, 70, 100).intersects(new Rectangle(zombie.x, zombie.y, 80, 110))) {
+            if (new Rectangle(playerX, playerY, 50, 50).intersects(new Rectangle(zombie.x, zombie.y, 50, 50))) {
+                System.out.println("💀 플레이어가 좀비한테 닿음! 게임 종료");
                 timer.stop();
+
+                // 점수 업데이트 (이전 점수보다 높을 경우)
                 if (score > highScore) {
+                    System.out.println("🏆 새로운 최고 점수! 업데이트 중...");
                     highScore = score;
                     fileHandler.updateScore(schoolId, highScore);
+                } else {
+                    System.out.println("📌 최고 점수 갱신 안 함 (기존 점수보다 낮음)");
                 }
 
-                // 게임 오버 메시지 표시 및 재시작 옵션 제공
+                // 게임 종료 메시지 표시
                 int option = JOptionPane.showConfirmDialog(
                         this,
                         "Game Over! \nYour score: " + score + "\nHigh Score: " + highScore + "\n다시 시작하시겠습니까?",
                         "Game Over",
-                        JOptionPane.YES_NO_OPTION);
+                        JOptionPane.YES_NO_OPTION
+                );
 
                 if (option == JOptionPane.YES_OPTION) {
                     restartGame();
@@ -209,43 +210,35 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
                     loginFrame.setVisible(true); // 로그인 창 다시 표시
                     Window window = SwingUtilities.getWindowAncestor(this);
                     if (window != null) {
-                        window.dispose(); // ZombieGo 창 닫기
+                        window.dispose(); // 게임 창 닫기
                     }
                 }
-                break; // 게임 오버 시 추가 충돌 체크 불필요
+                return; // 플레이어가 죽으면 더 이상 체크할 필요 없음
             }
         }
 
-        // 화살과 좀비 충돌 시
+        // 2. 화살이 좀비를 맞췄는지 체크 (좀비 사망)
         for (int i = 0; i < projectiles.size(); i++) {
             Point p = projectiles.get(i);
             for (int j = 0; j < zombies.size(); j++) {
                 Point zombie = zombies.get(j);
-                if (new Rectangle(p.x, p.y, 50, 50).intersects(new Rectangle(zombie.x, zombie.y, 80, 110))) {
+
+                if (new Rectangle(p.x, p.y, 20, 20).intersects(new Rectangle(zombie.x, zombie.y, 50, 50))) {
+                    System.out.println("🎯 화살이 좀비를 맞춤! 좀비 제거");
                     zombies.remove(j);
                     projectiles.remove(i);
-                    i--;
+                    i--; 
+
+                    // 점수 증가
                     score += 100;
-                    if (score > highScore) {
-                        highScore = score;
-                    }
+                    System.out.println("💯 현재 점수: " + score);
+
+                    // 새로운 좀비 생성
                     spawnZombie();
-                    break; // 화살 하나에 여러 좀비 충돌 방지
+                    break;
                 }
             }
         }
-    }
-
-    // 게임 재시작 메서드
-    private void restartGame() {
-        score = 0;
-        playerX = 300;
-        playerY = 400;
-        zombies.clear();
-        projectiles.clear();
-        spawnZombies(3);
-        timer.start();
-        requestFocusInWindow(); // 키 입력 다시 활성화
     }
 
     @Override
@@ -271,20 +264,15 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
             lastDirectionX = 0;
             lastDirectionY = 1;
         }
-        if (key == KeyEvent.VK_SPACE) {
+        if (key == KeyEvent.VK_SPACE)
             attack();
-        }
     }
 
     private void attack() {
         if (System.currentTimeMillis() - lastAttackTime >= attackCooldown) {
-            // 화살의 시작 위치를 플레이어의 중심으로 설정
-            int arrowStartX = playerX + 35 - 25;  // 플레이어 너비의 절반에서 화살 너비의 절반을 뺌
-            int arrowStartY = playerY + 50 - 25;  // 플레이어 높이의 절반에서 화살 높이의 절반을 뺌
-
-            projectiles.add(new Point(arrowStartX, arrowStartY));
-            projectileSpeedX = lastDirectionX * 20;
-            projectileSpeedY = lastDirectionY * 20;
+            projectiles.add(new Point(playerX + 15, playerY + 15));
+            projectileSpeedX = lastDirectionX * 10;
+            projectileSpeedY = lastDirectionY * 10;
             lastAttackTime = System.currentTimeMillis();
         }
     }
@@ -295,5 +283,17 @@ public class ZombieGo extends JPanel implements ActionListener, KeyListener {
 
     @Override
     public void keyTyped(KeyEvent e) {
+    }
+
+   // 게임 재시작 메서드
+    private void restartGame() {
+        score = 0;
+        playerX = 300;
+        playerY = 400;
+        zombies.clear();
+        projectiles.clear();
+        spawnZombies(3);
+        timer.start();
+        requestFocusInWindow(); // 키 입력 다시 활성화
     }
 }

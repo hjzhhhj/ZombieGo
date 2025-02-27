@@ -1,4 +1,3 @@
-// Login.java
 package hjzhhhj;
 
 import javax.swing.*;
@@ -16,7 +15,7 @@ public class Login extends JFrame {
     private JPanel topScoresPanel;
 
     public Login() {
-        fileHandler = new FileHandler("scores.txt");
+        fileHandler = new FileHandler(); // DB 연동 FileHandler 사용
         setTitle("Login");
         setSize(800, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -70,7 +69,7 @@ public class Login extends JFrame {
         setVisible(true);
     }
 
-    private void displayTopScores() {
+    public void displayTopScores() {
         List<Map.Entry<String, Integer>> topScores = fileHandler.getTopScores(3);
         topScoresPanel.removeAll();
         JLabel titleLabel = new JLabel("최고 점수 Top 3", SwingConstants.CENTER);
@@ -96,7 +95,7 @@ public class Login extends JFrame {
 
     private void startGame() {
         JFrame frame = new JFrame("Zombie Go");
-        ZombieGo game = new ZombieGo(schoolId, fileHandler, this); // Login frame을 ZombieGo에 전달
+        ZombieGo game = new ZombieGo(schoolId, fileHandler, this); // FileHandler와 Login 프레임을 전달
         frame.add(game);
         frame.pack();
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -104,7 +103,10 @@ public class Login extends JFrame {
         this.setVisible(false); // 로그인 창 숨기기
     }
 
-    // BackgroundPanel 클래스 (배경 이미지 설정)
+    public static void main(String[] args) {
+        new Login();
+    }
+
     class BackgroundPanel extends JPanel {
         private Image backgroundImage;
 
@@ -117,9 +119,5 @@ public class Login extends JFrame {
             super.paintComponent(g);
             g.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), this);
         }
-    }
-
-    public static void main(String[] args) {
-        new Login();
     }
 }

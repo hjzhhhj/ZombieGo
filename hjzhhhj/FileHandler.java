@@ -1,126 +1,97 @@
-// FileHandler.java
 package hjzhhhj;
 
-import java.io.*;
+import java.sql.*;
 import java.util.*;
 
 public class FileHandler {
 
-    private String filename;
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/zombie_go";
+    private static final String DB_USER = "zombie_user";
+    private static final String DB_PASSWORD = "password";
 
-    public FileHandler(String filename) {
-        this.filename = filename;
-        createFileIfNotExists(); // 파일 없으면 생성
+    public FileHandler() {
+        createTableIfNotExists();
     }
 
-    private void createFileIfNotExists() {
-        File file = new File(filename);
-        try {
-            File parent = file.getParentFile();
-            if (parent != null && !parent.exists()) {
-                parent.mkdirs(); // 디렉토리 생성
-            }
-            if (!file.exists()) {
-                file.createNewFile(); // 파일 생성
-                System.out.println("scores.txt 생성됨: " + file.getAbsolutePath());
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+    private void createTableIfNotExists() {
+        String sql = "CREATE TABLE IF NOT EXISTS scores (" +
+                "school_id VARCHAR(255) PRIMARY KEY," +
+                "score INTEGER" +
+                ");";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            System.out.println("Table created or already exists.");
+        } catch (SQLException e) {
+            System.err.println("Error creating table: " + e.getMessage());
         }
     }
 
-    // schoolId에 해당하는 점수를 가져오는 메서드
     public int getScore(String schoolId) {
-        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length == 2 && parts[0].equals(schoolId)) {
-                    return Integer.parseInt(parts[1]);
-                }
+        String sql = "SELECT score FROM scores WHERE school_id = ?";
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, schoolId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt("score");
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (NumberFormatException e) {
-            System.err.println("점수 파싱 오류: " + e.getMessage());
+        } catch (SQLException e) {
+            System.err.println("Error getting score: " + e.getMessage());
         }
-        return 0; // 점수가 없거나 오류 발생 시 0 반환
+        return 0;
     }
 
-    // schoolId에 해당하는 점수를 업데이트하는 메서드
     public void updateScore(String schoolId, int score) {
-        System.out.println("Updating score...");
-        Map<String, Integer> scores = new HashMap<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length == 2) {
-                    try {
-                        scores.put(parts[0], Integer.parseInt(parts[1]));
-                    } catch (NumberFormatException e) {
-                        System.err.println("점수 파싱 오류: " + e.getMessage());
-                    }
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        String sql = "INSERT INTO scores (school_id, score) VALUES (?, ?) " +
+                     "ON DUPLICATE KEY UPDATE score = GREATEST(score, ?)";
 
-        scores.put(schoolId, Math.max(scores.getOrDefault(schoolId, 0), score));
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            conn.setAutoCommit(false); // 🔥 트랜잭션 시작 (자동 커밋 비활성화)
 
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filename, false))) {
-            for (Map.Entry<String, Integer> entry : scores.entrySet()) {
-                bw.write(entry.getKey() + ":" + entry.getValue());
-                bw.newLine();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                System.out.println("Updating score for school ID: " + schoolId + " with score: " + score);
 
-        // 파일이 제대로 저장됐는지 확인
-        System.out.println("Saved scores in file:");
-        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                System.out.println(line);
+                pstmt.setString(1, schoolId);
+                pstmt.setInt(2, score);
+                pstmt.setInt(3, score);
+                int rowsAffected = pstmt.executeUpdate();
+
+                System.out.println("DB Update Success. Rows affected: " + rowsAffected);
+
+                conn.commit(); // 🔥 명시적으로 커밋
+                System.out.println("✅ Commit successful!");
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (SQLException e) {
+            System.err.println("Error updating score: " + e.getMessage());
         }
     }
+
 
     public List<Map.Entry<String, Integer>> getTopScores(int count) {
-        Map<String, Integer> scores = new HashMap<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length == 2) {
-                    try {
-                        scores.put(parts[0], Integer.parseInt(parts[1]));
-                    } catch (NumberFormatException e) {
-                        System.err.println("점수 파싱 오류: " + e.getMessage());
-                    }
-                }
+        String sql = "SELECT school_id, score FROM scores ORDER BY score DESC LIMIT ?";
+        List<Map.Entry<String, Integer>> topScores = new ArrayList<>();
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, count);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                String schoolId = rs.getString("school_id");
+                int score = rs.getInt("score");
+                topScores.add(new AbstractMap.SimpleEntry<>(schoolId, score));
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (SQLException e) {
+            System.err.println("Error getting top scores: " + e.getMessage());
         }
-
-        List<Map.Entry<String, Integer>> sortedScores = new ArrayList<>(scores.entrySet());
-        sortedScores.sort(Map.Entry.<String, Integer>comparingByValue(Comparator.nullsLast(Comparator.reverseOrder())));
-        return sortedScores.subList(0, Math.min(count, sortedScores.size()));
-    }
-
-    public void printFilePath() {
-        System.out.println("Absolute path of scores.txt: " + new File(filename).getAbsolutePath());
+        return topScores;
     }
 
     public static void main(String[] args) {
-        FileHandler fileHandler = new FileHandler("src/hjzhhhj/scores.txt"); // hjzhhhj 폴더 안에 저장
-        fileHandler.printFilePath(); // 파일 경로 확인
+        FileHandler fileHandler = new FileHandler();
         fileHandler.updateScore("12345", 100);
         System.out.println("Score for 12345: " + fileHandler.getScore("12345"));
+        List<Map.Entry<String, Integer>> topScores = fileHandler.getTopScores(3);
+        System.out.println("Top scores: " + topScores);
     }
 }
